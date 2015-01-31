@@ -1,0 +1,151 @@
+---
+title: 'Tarea 2'
+author: "Mario Becerra"
+date: "Enero 2015"
+output:
+  pdf_document:
+  css: estilos.css
+theme: spacelab
+---
+  
+```{r setup, include=FALSE}
+
+library(igraph)
+library(dplyr)
+library(bnlearn)
+library(gRain)
+set.seed(124362)
+options(digits=2)
+```
+
+Definamos una red bayesiana donde la variable de interés es si una persona paga o no paga un crédito. Esta variable depende del origen del acreedor (norte, sur o centro de la ciudad), de si trabaja o no, y de su edad. Asimismo, el que trabaje o no depende de si estudia o no. Esto se puede ver gráficamente a continuación:
+
+```{r}
+gr <- graph(c(1,2,3,2,4,2,5,4))
+plot(gr,
+     vertex.label = c('origen', 'paga', 'edad', 'trabaja', 'estudia'), 
+     vertex.size = 30, vertex.color = 'salmon', vertex.label.cex = 1.2,
+     vertex.label.color = 'gray40', vertex.frame.color = NA, asp = 0.5, 
+     edge.arrow.size = 1)
+```
+
+La distribución conjunta $\mathbb{P}(es, t, o, p, ed)$ se puede obtener con la factorización $\mathbb{P}(p \vert o, ed, t) \mathbb{P}(t \vert es) \mathbb{P}(es) \mathbb{P}(o) \mathbb{P}(ed)$.
+
+Definimos ahora las probabilidades.
+
+```{r}
+estudia <- c('No', 'Sí')
+p_estudia<- data.frame(estudia = factor(estudia, levels= c("No", "Sí")), 
+                       prob_es = c(0.3, 0.7))
+
+edad <- c('Adolescente', 'Adulto', 'Viejo')
+p_edad <- data.frame(edad = factor(edad), 
+                     prob_ed = c(0.3, 0.5, 0.2))
+
+origen <- c('Norte', 'Sur', 'Centro')
+p_origen <- data.frame(origen = factor(origen), 
+                       prob_o = c(0.3, 0.5, 0.2))
+
+trabaja <- c('No', 'Sí')
+niveles_trabaja <- expand.grid(estudia=estudia, trabaja=trabaja)
+p_trabaja_es <- data.frame(niveles_trabaja, prob_t=NA)
+p_trabaja_es$prob_t[1:2] <- c(0.4,0.7 )
+p_trabaja_es$prob_t[3:4] <- 1 - p_trabaja_es$prob_t[1:2]
+
+paga <- c('Sí', 'No')
+p_paga_o_ed_t <- data.frame(expand.grid(origen=origen, edad=edad, trabaja=trabaja, paga=paga), prob_oedt=NA)
+p_paga_o_ed_t$prob_oedt[1:18] <- runif(18) #Para simplificar cálculos
+p_paga_o_ed_t$prob_oedt[19:36] <- 1 - p_paga_o_ed_t$prob_oedt[1:18]
+```
+
+De esta forma tenemos que la probabilidades marginales  $\mathbb{P}(es)$, $\mathbb{P}(o)$ y $\mathbb{P}(ed)$ son:
+
+```{r}
+p_estudia
+p_edad
+p_origen
+```
+
+La condicional de \textit{trabaja} dado si estudia o no, $\mathbb{P}(t \vert es)$ es:
+Mario tiene pulgas.
+```{r}
+p_trabaja_es
+```
+
+La condicional de \textit{paga} dado si trabaja, su origen y su edad, $\mathbb{P}(p \vert o, ed, t)$ es:
+```{r}
+p_paga_o_ed_t
+```
+
+Con esta información podemos calcular la conjunta explícitamente para cada nivel.
+```{r}
+p_1 <- inner_join(p_trabaja_es, p_estudia)
+p_2 <- inner_join(p_1, p_paga_o_ed_t)
+p_3 <- inner_join(p_2, p_edad)
+p_conj <- inner_join(p_3, p_origen)
+p_conj$prob <- p_conj$prob_t * p_conj$prob_es * p_conj$prob_o * p_conj$prob_oedt * p_conj$prob_ed
+p_conj<-as.data.frame(apply(p_conj, 2, factor))
+p_conj
+```
+
+Ahora construiremos la red bayesiana con el paquete \textbf{bn\_learn}.
+
+```{r}
+graf <- empty.graph(c('estudia', 'trabaja', 'origen', 'edad', 'paga'))
+arcs(graf) <- matrix(c('origen', 'paga', 'trabaja', 'paga', 'edad', 'paga', 'estudia', 'trabaja'), ncol = 2, byrow = T)
+plot(graf)
+
+modelo <- bn.fit(graf, data = data.frame(p_conj[, c('trabaja', 'estudia', 'paga', 'edad', 'origen')]))
+```
+
+Ahora asignamos las probabilidades condicionales correctas, pues \textbf{bn\_learn} asigna $0.5$ de origen a las marginales.
+
+```{r}
+tab_1 <- table(p_conj$estudia)
+tab_1[c(1, 2)] <- p_estudia[,2]
+modelo$estudia <- tab_1
+modelo$estudia
+
+tab_1 <- table(p_conj$origen)
+tab_1[c(1:3)] <- p_origen[,2]
+modelo$origen <- tab_1
+modelo$origen
+
+tab_1 <- table(p_conj$edad)
+tab_1[c(1:3)] <- p_edad[,2]
+modelo$edad <- tab_1
+modelo$edad
+
+tab_1 <- xtabs(prob_t ~ trabaja + estudia, data = p_trabaja_es)
+modelo$trabaja <- tab_1
+modelo$trabaja
+
+levels(p_paga_o_ed_t$origen) <- levels(p_conj$origen)
+levels(p_paga_o_ed_t$paga) <- levels(p_conj$paga)
+levels(p_paga_o_ed_t$trabaja) <- levels(p_conj$trabaja)
+levels(p_paga_o_ed_t$edad) <- levels(p_conj$edad)
+tab_1 <- xtabs(prob_oedt ~ paga + trabaja + origen + edad , data = p_paga_o_ed_t)
+modelo$paga <- tab_1
+modelo$paga
+```
+
+Ahora vamos a hacer unos \textit{queries} con nuestra red.
+
+```{r}
+comp <- compile(as.grain(modelo))
+querygrain(comp)
+query_1 <- setEvidence(comp, nodes = c('estudia'), 
+  states = c('No'))
+querygrain(query_1)
+```
+
+Exportarlo a formato \textit{.net} para abrir en \textit{SAMIAM}.
+
+```{r}
+write.net(file = './02-Tarea2-modelo.net', modelo)
+```
+
+
+
+
+

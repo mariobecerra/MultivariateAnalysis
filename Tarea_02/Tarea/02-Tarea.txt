@@ -1,0 +1,7 @@
+Crea una red bayesiana con conocimiento experto, es decir, crea el esqueleto y determina las tablas de probabilidad condicional utilizando tu conocimiento.
+
+* El tema puede ser cualquiera y tus conocimientos pueden ser mínimos.
+* Tu red debe tener al menos 4 nodos.
+* Define tu red en SAMIAM.
+* Define tu red en R.
+* Realiza 3 querys (calcula tablas de probabilidad condicional dada evidencia de algún nodo). Utiliza tanto R (paquete gRain y bnlearn) como  SAMIAM y compara los resultados.
