@@ -1,0 +1,95 @@
+---
+title: "Tarea 3"
+author: "Mario Becerra 000124362"
+output: pdf_document
+---
+
+**Problema 3. Modelos locales**
+
+En estos ejemplos construiremos modelos locales usando tablas de frecuencias. Se utiliza los datos en el archivo admisiones.csv, en donde cada renglón representa a un alumno que solicitó entrar a una universidad, las variables son el departamento al que aplicó, el género del aplicante y su resultado (aceptación o rechazo).
+
+Se pide:
+
+Considera la relación Genero -> Admisión (solo dos variables). Construye un modelo local con la tabla de frecuencias y explica qué relación observas entre estas dos variables.
+
+Considera ahora el modelo Género -> Departamento -> Admisión. Construye los dos modelos locales con las tablas de frecuencias correspondientes. Bajo este modelo, ¿cómo se explica la relación de Género con Admisión que observaste en el ejemplo anterior?
+
+Explica qué significa que no haya una flecha directa de Género a Admisión. Verifica tu respuesta calculando el porcentaje de admitidos para cada sexo dentro de cada departamento, y explica qué tienen qué ver estas tablas con la ausencia de una flecha directa de Género a Admisión.
+
+```{r setup}
+options(digits=2)
+setwd('/home/mbc/Dropbox/ITAM_Dropbox/Estadística Multivariada/Tareas_Git/Tarea_03')
+
+library(bnlearn)
+library(dplyr)
+library(knitr)
+
+datos <- read.csv('admisiones.csv')
+```
+
+**Modelo con la relación Género -> Admisión.**
+
+```{r}
+white <- data.frame(from = c('Gender'), to = c('Admit'))
+net_gen_adm <- hc(data.frame(Gender=datos$Gender, Admit=datos$Admit), whitelist=white)
+fit_net_gen_adm <- bn.fit(net_gen_adm, 
+                          data = data.frame(
+                              Gender=datos$Gender, 
+                              Admit=datos$Admit), 
+                          method = 'mle')
+fit_net_gen_adm
+```
+
+La primera tabla indica que hay una proporción menor de mujeres que de hombres en los datos, mientras que en la segunda tabla se ve que la probabilidad estimada de ser admitido dado que es una mujer es menor que la de ser admitido dado que es un hombre. Esto podría llevar a pensar que existe cierta preferencia hacia el género masculino a la hora de hacer la selección de alumnos.
+
+**Modelo Género -> Departamento -> Admisión.**
+
+```{r}
+white <- data.frame(from = c('Gender', 'Dept'), to = c('Dept', 'Admit'))
+net_gen_dep_adm <- hc(
+                      data.frame(
+                          Gender=datos$Gender, 
+                          Admit=datos$Admit, 
+                          Dept=datos$Dept), 
+                      whitelist=white)
+graphviz.plot(net_gen_dep_adm, layout='circo')
+fit_net_gen__dep_adm <- bn.fit(net_gen_dep_adm, 
+                               data = data.frame(
+                                  Gender=datos$Gender, 
+                                  Admit=datos$Admit, Dept=datos$Dept),
+                               method = 'mle')
+fit_net_gen__dep_adm
+```
+
+Bajo este modelo, se puede decir que el departamento al que se van las personas depende del género, por ejemplo, el departamento C es el más popular entre las mujeres, mientras que el más popular entre los hombres es el A; y el menos popular entre las mujeres es el B y entre los hombres es el E.
+
+Asimismo, este modelo dice que la proporción de estudiantes admitidos es distinta para cada departamento. El departamento A es el que más admite alumnos y el F es el que menos alumnos admite.
+
+```{r}
+counts <- dplyr::summarise(group_by(datos, Gender, Dept, Admit), count = n())
+
+k=rep(0,nrow(counts))
+for(i in seq(to=nrow(counts)/2, 1)){
+  k[2*i]=counts$count[2*i] + counts$count[2*i-1]
+  k[2*i-1] = k[2*i]
+}
+
+counts$prop <- counts$count/k
+
+df <- cbind(counts[counts$Gender=='Male',], counts[counts$Gender=='Female',])
+
+kable(df, format = "markdown")
+```
+
+En la tabla anterior se puede ver el porcentaje de admitidos para cada sexo dentro de cada departamento, si se ve con detenimiento se puede observar que las proporciones son muy parecidas para ambos géneros; excepto en el departamento 1. Esto tal vez se asimile mejor en la siguiente tabla.
+
+```{r}
+df2 <- data.frame(Dept = counts$Dept[counts$Gender=='Male'], Dif=abs(counts$prop[counts$Gender=='Male'] - counts$prop[counts$Gender=='Female']))
+df2<-df2[seq(to=nrow(df2),by=2),]
+kable(df2, format = "markdown")
+```
+
+Esta tabla muestra la diferencia en valor absoluto de proporciones entre hombres y mujeres por cada departamento. Se puede ver que la diferencia es muy poca (excepto en el departamento A), por lo que se podría decir que el género no afecta directamente la probabilidad de ser admitido o no, esto explica la ausencia de una flecha directa de Género a Admisión.
+
+
+
