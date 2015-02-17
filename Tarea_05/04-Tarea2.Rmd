@@ -1,0 +1,48 @@
+---
+title: "05-Tarea"
+author: "Teresa Ortiz"
+output: html_document
+---
+
+1. En este ejercicio utilizaremos la red [Child](http://www.bnlearn.com/bnrepository/) (D. J. Spiegelhalter, R. G. Coewll). El objetivo es que utilices el algoritmo 
+de _hill climbing_ para recuperar la estructura de la red a partir de una 
+muestra. 
+```{r, warning=FALSE}
+library(bnlearn)
+child_net <- read.net("child.net")
+graphviz.plot(child_net)
+```
+
+* Los datos *muestra\_ch.dat* fueron generandos simulando de la red *Child* y 
+los utilizarás para recuperar la estructura utilizando como score el $AIC$ y el 
+$BIC$, repite la estimación tomando muestras de tamaño $n = 500, 1000$.
+
+En los próximos incisos utilizaremos la muestra de tamaño 500. 
+
+* Supón ahora que los expertos te informan que BirthAsphyxia debe ser nodo 
+raíz (no puede haber arcos dirigidos hacia BirthAsphyxia) y GruntingReport, 
+CO2Report, son nodos sin hijos (hojas). Incorpora esta información en tu 
+red (utiliza el parámetro _blacklist_ de la función _hc_) y aprende nuevamente 
+las redes usando los criterios AIC y BIC
+
+* Utiliza la función *arc.strength* con criterio AIC para calcular la fuerza de 
+los arcos en la gráfica correspondiente al score AIC en el inciso anterior.
+La fuerza indica en cuanto reduce el score cada uno de los arcos. Incluye
+esta información en la gráfica de la red utilizando la función *strength.plot*.
+
+2. Ahora repetiremos el _aprendizaje de estructura_ 500 veces con el objetivo de
+explorar un número mayor de estructuras y reducir el impacto de máximos locales 
+en el proceso de aprender estructura. Para esto se generan muestras _bootstrap_ 
+de los datos (muestras con reemplazo de la misma dimensión que los datos 
+originales), para cada muestra se aprende una red. Las redes aprendidas se 
+promedian con el fin de producir un modelo más robusto. Crearemos la 
+**red promedio** utilizando los arcos presentes en al menos el 80\% de las redes.
+Esta proporción mide la **fuerza** de cada arco.
+
+* Utiliza la función _boot.strength_ (algoritmo _hc_, argumentos _list(score = "aic", blacklist = blist)_) para generar 500 redes. La función te regresará
+  un data.frame con la _fuerza_ de cada arco, imprime los 20 arcos con 
+  mayor fuerza.  
+  
+* Utiliza la función _averaged.network_ con un parámetro _threshold_ de 0.8
+  para obtener la red promedio.
+
