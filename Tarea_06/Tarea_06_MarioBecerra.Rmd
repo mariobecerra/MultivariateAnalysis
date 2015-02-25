@@ -1,0 +1,146 @@
+---
+title: "Tarea 06"
+author: "Mario Becerra 124362"
+date: "23/02/2015"
+output: html_document
+---
+
+```{r, include=FALSE}
+setwd('/home/mbc/Dropbox/ITAM_Dropbox/Estadística Multivariada/Tareas_Git/Tarea_06')
+```
+
+
+```{r, message=FALSE, error=FALSE, }
+library(gRim)
+library(Rgraphviz)
+library(png)
+library(plyr)
+```
+
+
+**1. Los siguientes son datos de cancer de próstata de Morrison et. al 1973. Los datos son del centro de diagnóstico (X1), grado nuclear (X2) y supervivencia (X3).**
+
+X2  Maligno	Maligno	Beningno	Benigno
+X1/X3	no sobrevive	sobrevive	no sobrevive	sobrevive
+Boston	35	59	47	112
+Glanmorgan	42	77	26	76
+
+**1.1 Construye un modelo no dirigido que incluya todos los datos (aprende la estructura usando la función stepwise).**
+
+```{r}
+df<-expand.grid(Centro=c('Boston', 'Glanmorgan'), Grado=c('Maligno', 'Benigno'), sup=c( 'Sob', 'NS'))
+
+rep.row <- function(r, n){
+  colwise(function(x) rep(x, n))(r)
+}
+
+diag<-rbind(
+rep.row(df[1,],59),
+rep.row(df[2,],77),
+rep.row(df[3,],112),
+rep.row(df[4,],76),
+rep.row(df[5,],35),
+rep.row(df[6,],42),
+rep.row(df[7,],47),
+rep.row(df[8,],26))
+
+head(diag)
+tail(diag)
+table(diag)
+```
+
+Modelo:
+
+```{r}
+m_init <- dmod(~.^1 , data = diag)
+m_ad <- stepwise(m_init, criterion = 'aic', details = T,
+                     direction = 'forward', type = 'unrestricted')
+plot(m_ad)
+```
+
+
+**1.2 Obtén las probabilidades ajustadas (usa *\$fit\$fit*).**
+
+```{r}
+m_ad$fit$fit
+```
+
+
+**1.3 Podemos ajustar modelos log-lineales usando modelos lineales generalizados. Para esto, ajusta el modelo correspondiente a la gráfica usando la función glm con familia poisson. Compara las probabilidades ajustadas con las obtenidas en el punto anterior.**
+
+```{r}
+df$Times<-NA
+df[1,4]<-59
+df[2,4]<-77
+df[3,4]<-112
+df[4,4]<-76
+df[5,4]<-35
+df[6,4]<-42
+df[7,4]<-47
+df[8,4] <- 26
+
+mod <- glm(formula = Times ~ Centro + Grado + sup, family = poisson, data = df)
+summary(mod)
+```
+
+
+**2. Vimos en una tarea anterior que la única indicación de dependencia entre aceptación y género estaba en un departamento particular (dept A). Construye entonces dos modelos log-lineales: uno para el departamento A y otro para el resto. Explica por qué usar dos modelos es mejor para uno solo para entender estos datos.**
+
+Preparando los dataframes para cada modelo: *ad1* será el modelo para el departamento A y *ad2* para los demás.
+
+```{r}
+ad <- read.csv('admisiones.csv')
+ad1 <- ad[ad[,4]=='A',-1]
+ad2 <- ad[ad[,4]!='A',-1]
+ad1$Dept <- factor(ad1$Dept)
+ad2$Dept <- factor(ad2$Dept)
+```
+
+Departamento A:
+
+```{r}
+m_init1 <- dmod(~.^1 , data = ad1[,-3])
+m_ad1 <- stepwise(m_init1, criterion = 'aic', details = T,
+                     direction = 'forward', type = 'unrestricted')
+plot(m_ad1)
+```
+
+Los demás:
+
+```{r}
+m_init2 <- dmod(~.^1 , data = ad2[,-3])
+m_ad2 <- stepwise(m_init2, criterion = 'aic', details = T,
+                     direction = 'forward', type = 'unrestricted')
+plot(m_ad2)
+```
+
+Conviene usar dos modelos distintos porque, como se puede ver en las gráficas de los modelos aprendidos, y como ya habíamos notado antes, la admisión en el departamento A parece sí depender del género mientras que en los demás no. En este ejemplo, la relación apareció en ambos modelos, sin embargo, más adelante convendría ver la fuerza del arco de cada modelo.
+
+**3. Implementa el algoritmo de Modas Condicionales Iteradas para imágenes binarias que vimos en clase.**
+**3.1 Construye una frase o dibujo en blanco y negro (puedes usar Word Art) y guardala como imagen (ej. jpeg).**
+**3.2 Leela en R y conviertela en una matriz binaria con valores {−1,1}.**
+**3.3 Añade ruido cambiando el signo de cada pixel con probabilidad 0.15.**
+**3.4 Implementa el algoritmo de modas condicionales iteradas visto en clase para limpiar la imagen (grafica la imagen original, con ruido y después de limpiar).**
+
+```{r}
+mask<-readPNG('Mask.png')
+mask<-mask[,,3]
+mask[mask!=0]=-1
+mask[mask==0]=1
+image(mask)
+```
+
+Añadiendo ruido:
+
+```{r}
+noise<-replicate(ncol(mask), runif(nrow(mask)))
+mask[noise<.15] <- -mask[noise<.15]
+image(mask)
+```
+
+
+
+
+
+
+
