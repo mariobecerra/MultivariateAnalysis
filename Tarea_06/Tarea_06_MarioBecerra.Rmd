@@ -99,7 +99,7 @@ ad2$Dept <- factor(ad2$Dept)
 Departamento A:
 
 ```{r}
-m_DepA1 <- dmod(~.^1 , data = ad1[,-3])
+m_DepA1 <- dmod(~.^1 , data = ad1)
 net_DepA1 <- stepwise(m_DepA1, criterion = 'aic', details = T,
                      direction = 'forward', type = 'unrestricted')
 plot(net_DepA1)
@@ -108,29 +108,29 @@ plot(net_DepA1)
 Los demás:
 
 ```{r}
-m_DepTodos1 <- dmod(~.^1 , data = ad2[,-3])
+m_DepTodos1 <- dmod(~.^1 , data = ad2)
 net_DepTodos1 <- stepwise(m_DepTodos1, criterion = 'aic', details = T,
                      direction = 'forward', type = 'unrestricted')
 plot(net_DepTodos1)
 ```
 
-Conviene usar dos modelos distintos porque, como se puede ver en las gráficas de los modelos aprendidos, y como ya habíamos notado antes, la admisión en el departamento A parece sí depender del género mientras que en los demás no. En este ejemplo, la relación apareció en ambos modelos, sin embargo, más adelante convendría ver la fuerza del arco de cada modelo.
+Conviene usar dos modelos distintos porque, como se puede ver en las gráficas de los modelos aprendidos, y como ya habíamos notado antes, la admisión en el departamento A parece sí depender del género mientras que en los demás no. Se puede ver en las gráficas que para el departamento A no existe relación entre el departamento y las variables *Admit* y *Gender*.
 
-Para esto, aumentamos el valor de la penalización *k*.
+Convendría ver la fuerza del arco de cada modelo, para esto, aumentamos el valor de la penalización *k*, el cual, si es más grande, muestra las relaciones más fuertes en las gráficas.
 
 ```{r}
-m_DepA2 <- dmod(~.^1 , data = ad1[,-3])
+m_DepA2 <- dmod(~.^1 , data = ad1)
 net_DepA2 <- stepwise(m_DepA2, k = 4*log(nrow(ad1)), details = T,
                      direction = 'forward', type = 'unrestricted')
 plot(net_DepA2)
 
-m_DepTodos2 <- dmod(~.^1 , data = ad2[,-3])
+m_DepTodos2 <- dmod(~.^1 , data = ad2)
 net_DepTodos2 <- stepwise(m_DepTodos2, k = 4*log(nrow(ad2)), details = T,
                      direction = 'forward', type = 'unrestricted')
 plot(net_DepTodos2)
 ```
 
-Sin embargo, notamos que con mayor penalización, la relación entre *Gender* y *Admit* se rompe en el departamento A y se mantiene en los demás.
+Notamos que con mayor penalización, la relación entre *Gender*, *Admit* y *Dept* se rompe en el departamento A mientras que se mantiene en los demás; pero esta relación es de dependencia condicional, es decir, dado el departamento, el género es independiente de la aceptación en la universidad.
 
 **3. Implementa el algoritmo de Modas Condicionales Iteradas para imágenes binarias que vimos en clase.**
 **3.1 Construye una frase o dibujo en blanco y negro (puedes usar Word Art) y guardala como imagen (ej. jpeg).**
