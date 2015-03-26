@@ -1,0 +1,156 @@
+---
+title: "Tarea 7 Datos faltantes"
+author: "Mario Becerra 124362"
+date: "24/03/2015"
+output: html_document
+---
+
+```{r setup, message=FALSE}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(mi)
+```
+
+
+Se usarán los datos de enfermedades del corazón en Sudáfrica, obtenidos del paquete *ElemStatLearn* de R. A estos datos les llamaremos los *datos íntegros*. 
+
+Descripción de las variables:
+
+* sbp: systolic blood pressure
+* tobacco: cumulative tobacco (kg)
+* ldl: low density lipoprotein cholesterol
+* adiposity: a numeric vector
+* famhist: family history of heart disease, a factor with levels Absent Present
+* typea: type-A behavior
+* obesity: a numeric vector
+* alcohol: current alcohol consumption
+* age: age at onset
+* chd: response, coronary heart disease
+
+```{r}
+library(ElemStatLearn)
+datos <- SAheart
+head(datos)
+```
+
+Vamos a un programa que resulte en que aproximadamente la mitad de los datos de la variable *ldl* sean faltantes dependiendo de *adiposity* de tal manera que los faltantes sean aleatorios pero no completamente aleatorios, esto es, la probabilidad de que falte *ldl* depende de *adiposity* (MAR pero no MCAR). Llamaremos a estos datos los *datos disponibles*.
+
+El mecanismo de faltantes es que si el valor de *adiposity* es mayor a su media, entonces va a faltar el dato de esta fila en *ldl*.
+
+```{r}
+datos$ldl_miss <- datos$ldl
+datos$ldl_miss[datos$adiposity > mean(datos$adiposity)] <- NA
+sum(is.na(datos$ldl_miss))/nrow(datos)
+```
+
+De esta forma, el `r round(sum(is.na(datos$ldl_miss))/nrow(datos)*100, 2)`% de los datos en *ldl_miss* es faltante y depende de la media de *adiposity*.
+
+Realizaremos ahora una regresión de datos completos con los datos disponibles donde *adiposity* es predictor y *ldl* es la variable respuesta.
+
+```{r}
+mod1 <- lm(ldl_miss~adiposity, data=datos)
+summary(mod1)
+```
+
+Compararemos estos resultados con una regresión con los *datos íntegros*.
+
+```{r}
+mod2 <- lm(ldl~adiposity, data=datos)
+summary(mod2)
+```
+
+Vemos que los resultados son consistentes uno con otro. Esto se puede ver de manera gráfica que ambas líneas son prácticamente iguales.
+
+```{r, warning=FALSE}
+datos_graf <- datos[,c(3,4,11)] %>% gather(type, value, ldl,ldl_miss)
+
+ggplot(datos_graf, aes(x = adiposity, y = value)) +
+  geom_point(aes(x = adiposity, y = value, colour = type), size = 1.5) +
+  geom_smooth(aes(x = adiposity, y = value, group = type, color = type), method = "lm", se = TRUE) +
+  ylab('ldl')
+```
+
+Probemos ahora tomando *ldl* como predictor y *adiposity* como variable respuesta. Primero con los *datos disponibles*.
+
+```{r}
+mod3 <- lm(adiposity~ldl_miss, data=datos)
+summary(mod3)
+```
+
+Ahora con los *datos íntegros*.
+
+```{r}
+mod4 <- lm(adiposity~ldl, data=datos)
+summary(mod4)
+```
+
+Vemos que ahora las *betas* de la regresión no son consistentes y difieren en mayor manera que en los dos modelos anteriores. Esto se puede ver gráficamente a continuación, donde las rectas difieren mucho más que en la gráfica anterior.
+
+```{r, message=FALSE, warning=FALSE}
+ggplot(datos_graf, aes(x = value, y = adiposity)) +
+  geom_point(aes(x = value, y = adiposity, colour = type), size = 1.5) +
+  geom_smooth(aes(x = value, y = adiposity, group = type, color = type), method = "lm", se = TRUE) +
+  xlab('ldl')
+```
+
+Ahora haremos una imputación estocástica con regresión.
+
+```{r}
+datos$ldl_imp_st <- datos$ldl_miss
+pred_1 <- predict(mod1, newdata = subset(datos, is.na(ldl_miss)))
+datos$ldl_imp_st[is.na(datos$ldl_miss)] <- pred_1 + rnorm(sum(is.na(datos$ldl_miss)), 0, sd = summary(mod1)$sigma)
+```
+
+A continuación, se puede ver que hubo mejoría en las estimaciones de la recta con *adiposity* como variable respuesta mediante imputación estocástica con regresión.
+
+```{r}
+datos_graf2 <- datos[,c(3,4,12)] %>% gather(type, value, ldl,ldl_imp_st)
+
+ggplot(datos_graf2, aes(x = adiposity, y = value)) +
+  geom_point(aes(x = adiposity, y = value, colour = type), size = 1.5) +
+  geom_smooth(aes(x = adiposity, y = value, group = type, color = type), method = "lm", se = TRUE) +
+  labs(title = "Con imputación estocástica") + ylab('ldl')
+
+ggplot(datos_graf2, aes(x = value, y = adiposity)) +
+  geom_point(aes(x = value, y = adiposity, colour = type), size = 1.5) +
+  geom_smooth(aes(x = value, y = adiposity, group = type, color = type), method = "lm", se = TRUE) +
+  labs(title = "Con imputación estocástica") + xlab('ldl')
+```
+
+```{r, message=FALSE, eval=FALSE}
+info <- mi.info(datos)
+info
+info <- update(info, "include", list("ldl_imp_st" = FALSE, "ldl"=FALSE, "ldl_miss"=TRUE))
+info
+datos_2 <- mi.preprocess(datos)
+attr(datos_2, "mi.info")
+IMP <- mi(datos_2, n.iter = 100)
+save(IMP, file='IMP.Rdata')
+```
+
+```{r}
+load('IMP.Rdata')
+plot(IMP)
+IMP.dat <- mi.data.frame(IMP, m = 1)
+
+temp <- IMP.dat[,c(4,11)] 
+temp$ldl <- datos$ldl
+datos_graf3 <- temp %>% gather(type, value, ldl,ldl_miss)
+
+ggplot(datos_graf3, aes(x = adiposity, y = value)) +
+  geom_point(aes(x = adiposity, y = value, colour = type), size = 1.5) +
+  geom_smooth(aes(x = adiposity, y = value, group = type, color = type), method = "lm", se = TRUE) +
+  labs(title = "Con imputación estocástica (MI)") + ylab('ldl')
+
+ggplot(datos_graf3, aes(x = value, y = adiposity)) +
+  geom_point(aes(x = value, y = adiposity, colour = type), size = 1.5) +
+  geom_smooth(aes(x = value, y = adiposity, group = type, color = type), method = "lm", se = TRUE) +
+  labs(title = "Con imputación estocástica (MI)") + xlab('ldl')
+```
+
+
+
+
+
+
