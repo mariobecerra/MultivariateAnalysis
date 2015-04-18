@@ -1,0 +1,252 @@
+---
+title: "10-Tarea"
+author: "Mario Becerra"
+date: "Abril 2015"
+output: html_document
+---
+
+Basado en el trabajo de Andreu Boada de Atela (andreuboadadeatela@gmail.com).
+
+```{r, echo = FALSE, results='hide', message=FALSE, warning=FALSE}
+lapply(c('tidyr','ggplot2','Hmisc','reshape2','glmnet','Rgraphviz','igraph','gRain','bnlearn','arm','vcd','RColorBrewer','ROCR','lubridate','stringr','dplyr','plyr'), require, character.only=T)
+Sys.setlocale('LC_ALL','en_US.utf-8')
+options(digits=4)
+```
+
+
+# Ejercicio 1
+
+Implementar el algoritmo EM para mezclas de normales en el caso univariado.
+
+Modelo de mezcla de dos normales. Consideremos los siguientes datos:
+
+```{r}
+set.seed(280572)
+N <- 800
+n <- sum(rbinom(N, 1, 0.6))
+
+x_1 <- rnorm(N - n, 0, 0.5)
+x_2 <- rnorm(n, 2, 0.3)
+qplot(c(x_1, x_2))
+```
+
+Estos datos tienen una estructura bimodal. Es poco apropiado modelar estos datos 
+con un modelo normal $(\mu,\sigma^2)$.
+
+Podemos entonces modelar pensando que los datos vienen de dos clases, cada una 
+con una distribución normal pero con distintos parámetros. ¿Cómo ajustaríamos 
+tal modelo?
+
+La variable aleatoria $X$ es una mezcla de normales si
+$$p(x)=\sum_{k=1}^K \pi_k \phi_{\theta_k}(x)$$
+donde $\phi_{\theta_k}$ es una densidad normal con parámetros 
+$\theta_k=(\mu_k, \sigma_k)$ y los ponderadores de la mezcla $\pi_k$ satisfacen
+$\sum_i \pi_i = 1$
+
+Ahora, si vemos la mezcla Gaussiana desde la representación generativa, o 
+formulación en variable latente, tenemos el modelo gráfico $\Delta$ -> $X$
+donde $\Delta$ es una indicadora de clase. En el caso del modelo de dos clases
+tenemos $\delta \in \{0,1\}$ y sea $P(\delta=1)=\pi$, escribimos la conjunta
+$$p(\delta, x)=\pi^{\delta}(1-\pi)^{1-\delta}[\delta\phi_{\theta_1}(x)+(1-\delta)\phi_{\theta_2}(x)]$$
+
+y podemos verificar que la distribución marginal es una mezcla gaussiana:
+$$p(x)\sum_{\delta}p(x|\delta)p(\delta)$$
+$$=\phi_{\theta_1}(x) \pi + \phi_{\theta_2}(x)(1-\pi)$$
+
+Ahora, si conociéramos la clase a la que pertenece cada observación ($\delta^i$)
+podríamos escribir la log-verosimilitud completa (sin censura) como
+$$\sum_{i=1}^N \log(\delta^i \phi_{\theta_1} (x^i)+ (1-\delta^i)\phi_{\theta_2}(x^i)) + \delta^i \log\pi + (1-\delta^i)\log(1-\pi).$$
+
+Aquí, es fácil ver que la verosimilitud se separa en dos partes, una
+para $\delta^i=1$ y otra para $\delta^i=0$, y los estimadores de máxima
+verosimilitud son entonces:
+
+$$\hat{\mu}_1=\frac{\sum_i\delta^i x^i}{\sum_i (\delta^i)}$$
+$$\hat{\mu}_2=\frac{\sum_i(1-\delta^i) x^i}{\sum_i (1-\delta^i)}$$
+
+$$\hat{\sigma}_1^2=\frac{\sum_i\delta^i (x^i-\mu_1)^2}{\sum_i (\delta^i)}$$
+$$\hat{\sigma}_2^2=\frac{\sum_i(1-\delta^i) (x^i-\mu_2)^2}{\sum_i (1-\delta^i)},$$
+
+y $\hat{\pi}$ es la proporción de casos tipo 1 en los datos.
+Este problema es entonces trivial de resolver. 
+
+En el caso de variables latentes $\delta^i$ están censuradas y tenemos que 
+marginalizar con respecto a $\delta^i$, resultando en:
+
+$$\sum_{i=1}^N \log(\pi \phi_{\theta_1} (x^i)+ (1-\pi)\phi_{\theta_2}(x^i)).$$
+
+donde $\pi$ es la probabilidad de que la observación venga de la primera
+densidad.  Este problema es más difícil pues tenemos tanto $\pi$ como $\theta_1$ 
+y $\theta_2$ dentro del logaritmo. Podemos resolver numéricamente como sigue con la funcion *optim* de R:
+
+```{r}
+crearLogLike <- function(x){
+  logLike <- function(theta){
+    pi <- exp(theta[1]) / (1 + exp(theta[1]))
+    mu_1 <- theta[2]
+    mu_2 <- theta[3]
+    sigma_1 <- exp(theta[4])
+    sigma_2 <- exp(theta[5])
+    sum(log(pi*dnorm(x, mu_1, sd=sigma_1)+(1-pi)*dnorm(x,mu_2,sd=sigma_2)))
+  }
+  logLike
+}
+x <- c(x_1,x_2)
+loglik <- crearLogLike(x)
+system.time(salida <- optim(c(0.5,0,0,1,1), 
+                            loglik, control = list(fnscale=-1)))
+exp(salida$par[1]) / (1 + exp(salida$par[1]))
+salida$par[2:3]
+exp(salida$par[4:5])
+```
+
+Implementando ahora el algoritmo de Esperanza Maximización.
+
+```{r}
+em <- function(theta, x){
+  # Entrada: theta.gorro y datos
+  # Salida: función de theta (esperada)
+  n <- length(x)
+  gamma <- mat.or.vec(n,1) # inicializar vector de gammas
+  for(i in 1:n){ # estimacion de gammas
+    aux <- theta[5] * dnorm(x[i],theta[1],sqrt(theta[3]))
+    aux2 <- (1-theta[5])*dnorm(x[i],theta[2],sqrt(theta[4]))
+    gamma[i] <- aux / (aux + aux2)
+  }
+  
+  # Se evalua la verosimilitud
+  vec <- mat.or.vec(n,1)
+  for(i in 1:n){
+    vec[i] <- log(theta[5]*dnorm(x[i],theta[1],sqrt(theta[3]))  + (1 - theta[5])*dnorm(x[i],theta[2],sqrt(theta[4])))
+  }
+  fun_eval0 <- sum(vec)
+  
+  # Estimacion de pi (pi^hat)
+  theta[5] <- (1/n)*sum(gamma)
+  # Estimacion de mu_1 (mu_1^hat)
+  theta[1] <- (sum(gamma*x))/(sum(gamma))
+  # Estimacion de mu_2 (mu_2^hat)
+  theta[2] <- (sum((1-gamma)*x))/(sum(1-gamma))
+  # Estimacion de sigma_1^2
+  theta[3] <- (sum(gamma*(x-theta[1])^2))/(sum(gamma))
+  # Estimacion de sigma_2^2
+  theta[4] <- (sum((1-gamma)*(x-theta[2])^2))/(sum(1-gamma))
+  
+  # Evalua verosimilitud
+  vec <- mat.or.vec(n,1)
+  for(i in 1:n){
+    vec[i] <- log(theta[5]*dnorm(x[i],theta[1],sqrt(theta[3]))  + (1 - theta[5])*dnorm(x[i],theta[2],sqrt(theta[4])))
+  }
+  fun_eval <- sum(vec)
+  
+  # convergencia
+  while(abs(fun_eval - fun_eval0) > 1e-6){
+    for(i in 1:n){ # estimacion de gammas
+      aux <- theta[5] * dnorm(x[i],theta[1],sqrt(theta[3]))
+      aux2 <- (1-theta[5])*dnorm(x[i],theta[2],sqrt(theta[4]))
+      gamma[i] <- aux / (aux + aux2)
+    }
+    theta[5] <- (1/n)*sum(gamma) # pi
+    theta[1] <- (sum(gamma*x))/(sum(gamma)) # mu_1
+    theta[2] <- (sum((1-gamma)*x))/(sum(1-gamma)) # mu_2
+    theta[3] <- (sum(gamma*(x-theta[1])^2))/(sum(gamma)) # sigma_1
+    theta[4] <- (sum((1-gamma)*(x-theta[2])^2))/(sum(1-gamma)) # sigma_2
+    
+    # Evaluacion de verosimilitud
+    vec <- mat.or.vec(n,1)
+    for(i in 1:n){
+      vec[i] <- log(theta[5]*dnorm(x[i],theta[1],sqrt(theta[3]))  + (1 - theta[5])*dnorm(x[i],theta[2],sqrt(theta[4])))
+    }
+    fun_eval0 <- fun_eval
+    fun_eval <- sum(vec)
+  }
+  return (theta)
+}
+
+theta <- c(0.5,3,1,1,0.5)
+system.time(theta.n <- em(theta,x))
+# pi = 0.3
+theta.n[5]
+# mu_1 = 0
+theta.n[1]
+# mu_2 = 2
+theta.n[2]
+# sigma_1 = 1
+sqrt(theta.n[3])
+# sigma_2 = 0.5 
+sqrt(theta.n[4])
+```
+
+# Ejercicio 2
+
+Realizar conglomerados usando los datos HELP.
+
+Utilizaremos las siguientes variables de los datos HELP: en la calle o refugio los últimos 180 días (*homeless*), puntaje CESD mayor a 20, recibió tratamiento por abuso de sustancias (satreat), ligado a cuidados primarios (*linkstatus*). Crea conglomerados usando poLCA.
+
+
+Lectura de datos:
+```{r}
+library(poLCA)
+help <- read.csv('help.csv')
+```
+
+```{r}
+table(help$homeless)
+```
+
+```{r}
+help$cesd20 <- 1*(help$cesd > 20)
+table(help$cesd20)
+```
+
+Recibió tratamiento por abuso de sustancias:
+
+```{r}
+table(help$satreat)
+```
+
+Ligado a ciudadanos primarios:
+
+```{r}
+table(help$linkstatus)
+```
+
+El objetivo es crear conglomerados a partir de estas 4 variables:
+
+```{r}
+f <- cbind(homeless, cesd20, satreat, linkstatus) ~ 1
+tabla <- dplyr::select(help,homeless,cesd20,satreat,linkstatus)
+tabla <- tabla[complete.cases(tabla),]
+tabla <- tabla %>%
+  dplyr::mutate_each(funs(factor)) %>%
+  data.frame
+str(tabla)
+```
+
+Modelo:
+
+```{r}
+net_obs <- hc(tabla,  score='aic')
+graphviz.plot(net_obs)
+```
+
+
+```{r}
+mod <- poLCA(f, tabla, nclass = 3, verbose = FALSE) 
+mod$aic
+```
+
+Es mejor el modelo de tres clases latentes.
+
+```{r}
+tabla$pred_class <- factor(mod$predclass)
+str(tabla)
+```
+
+Modelo de clases latentes:
+
+```{r}
+net_obs_clases <- hc(tabla,  score='bic')
+graphviz.plot(net_obs_clases)
+```
+
