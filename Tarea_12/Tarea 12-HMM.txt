@@ -1,0 +1,26 @@
+1. Utiliza datos secuenciales para ajustar un HMM. Puedes elegir una base de 
+datos de tu interés o utilizar los datos economics que vienen en el 
+paquete ggplot2.
+
+  * Utiliza el paquete depmixS4 para ajustar un HMM. ¿Cómo elegiste el 
+  número de estados?
+  
+  * Realiza simulaciones del modelo para realizar diagnósticos del ajuste del 
+  modelo: grafica los datos reales junto con conjuntos de datos simulados, 
+  compara las atcorrelaciones.
+  
+  * ¿Cómo se compara el error de predicción del HMM contra predecir el valor
+  del tiempo anterior?
+
+2. Los datos conapo_2010.csv reportan el porcentaje de la población analfabeta, 
+sin primaria terminada, sin drenaje, etc. En este ejercicio utilizarás esta base 
+de datos para construir un índice de carencias (el ínidice de marginación se 
+construye a nivel localidad y no municipio).
+
+  * Utiliza la función prcomp de R para realizar PCA.
+
+  * ¿Qué porcentaje de la varianza en los datos está explicado por la
+primera componente? (Realiza una gráfica usando _screeplot_)
+
+  * Realiza una gráfica utilizando la función biplot, si no has estudiado
+PCA antes discuutiremos esta gráfica en la clase.

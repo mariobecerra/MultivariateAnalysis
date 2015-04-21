@@ -1,0 +1,155 @@
+---
+title: "Tarea 12"
+author: "Mario Becerra 124362"
+date: "20/04/2015"
+output: html_document
+---
+
+```{r, message=FALSE}
+library(ggplot2)
+library(depmixS4)
+library(plyr)
+library(dplyr)
+library(knitr)
+```
+
+#Ejercicio 1
+
+Se uilizan los datos secuenciales del paquete *economics* del paquete ggplot2. Estos datos fueron producidos de series de tiempo económicas de EUA. Tiene 478 observaciones de 6 variables, siendo estas:
+
+* *date*: fecha de la recolección del dato
+
+* *pce*: gastos personales en consumo (en miles de millones de dólares)
+
+* *pop*: población total (en miles)
+
+* *psavert*: tasa de ahorro personal
+
+* *uempmed*: mediana de duración de desempleo (en semanas)
+
+* *unemploy*: número de desempleados (en miles)
+
+```{r}
+datos <- economics
+kable(head(datos))
+```
+
+Construimos ahora una nueva variable que represente la tasa de desempleo, *unemprate*, construida con el número de desempleados sobre la polación ($unemprate = \dfrac{unemploy}{pop}$).
+
+```{r}
+datos$unemprate <- datos$unemploy/datos$pop
+kable(head(datos))
+```
+
+```{r}
+ggplot(datos, aes(x = date, y = unemprate)) + geom_line(size=0.4)
+```
+
+Ahora, modelaremos la tasa de desempleo con un modelo de Markov oculto (HMM).
+
+```{r, message=FALSE, eval=FALSE}
+
+modelos_hmm <- lapply(1:10, function(i) {
+  mod_hmm <- depmix(unemprate~date+pce+psavert+uempmed, data=datos, nstates=i, family=gaussian())
+  fit_hmm <- fit(mod_hmm, emcontrol = em.control(maxit = 200))
+  fit_hmm
+})
+
+save(modelos_hmm, file='./Out/modelos_hmm.Rdata')
+```
+```{r}
+load('./Out/modelos_hmm.Rdata')
+
+df_temp <- data.frame(NumEstados=1:10, BIC=sapply(modelos_hmm, BIC), AIC=sapply(modelos_hmm, AIC))
+kable(df_temp)
+
+i=which(df_temp$BIC==min(df_temp$BIC))
+mod <- modelos_hmm[[i]]
+```
+
+Elegimos el modelo con `r i` estados ocultos, pues es el de menor BIC; y el AIC también es relativamente chico, aunque no es el menor.
+
+Ahora realizamos simulaciones del modelo para realizar diagnósticos del ajuste del modelo
+  
+```{r}
+class(mod) <- 'depmix'
+set.seed(2805)
+sims_1 <- simulate(mod, nsim = 19)
+unemp_null <- data.frame(unemprate = sims_1@response[[1]][[1]]@y, 
+  date = rep(datos$date, 19)) %>%
+  rbind(datos[,c(1,7)])
+codigo <- sample(1:20)
+unemp_null$tipo <- rep(codigo, each = nrow(datos))
+head(unemp_null)
+tail(unemp_null)
+```
+
+Graficamos los datos reales junto con conjuntos de datos simulados.
+
+```{r}
+ggplot(unemp_null, aes(x = date, y = unemprate)) +
+  geom_line(size=0.25) + 
+  facet_wrap(~tipo)
+```
+
+Vemos que las autocorrelaciones de grado 1 son similares en las simulaciones.
+
+```{r}
+temp <- unemp_null %>%
+  group_by(tipo) %>%
+  mutate(rate_lag = lag(unemprate)) %>%
+  filter(!is.na(rate_lag)) %>%
+  summarise(cor = cor(unemprate, rate_lag))
+kable(temp)
+```
+
+E incluso podemos comparar las gráficas de autocorrelación, que no muestran desajuste importante:
+
+```{r, fig.width=3, fig.height=4}
+set.seed(1602)
+sims_x <- ddply(unemp_null, 'tipo', function(df){
+  x <- df$unemprate
+  acf(x, lag.max=12, main="")
+  x
+})
+```
+
+Podemos ver el desempeño de estos modelos en predicción:  
+  
+```{r, eval=FALSE}
+set.seed(124362)
+preds_2  <- sapply((nrow(datos)-50):(nrow(datos)-1) ,function(k){
+  print(k)
+  dat.1 <- datos[1:k,,drop=FALSE]
+  mod.1 <- depmix(unemprate~date+pce+psavert+uempmed, data=datos, nstates=i, family=gaussian())                  
+  fit.mod.1 <- fit(mod.1, verbose = FALSE, emcontrol=em.control(maxit=600))
+  probs.1 <- fit.mod.1@posterior[k,2:4]
+  estado.k <- sample(1:3, 1, prob=probs.1)
+  estado.pred <- which.max(predict(fit.mod.1@transition[[estado.k]]))
+  fit.mod.1@response[[estado.pred]][[1]]@parameters[1]$coefficients
+})
+save(preds_2, file='./Out/preds_2.Rdata')
+```
+```{r}
+load('./Out/preds_2.Rdata')
+EMA<-mean(abs(exp(preds_2) - datos[(nrow(datos)-51):(nrow(datos)-1),7]))
+VA<-mean(abs(datos[(nrow(datos)-50):(nrow(datos)),7] - datos[(nrow(datos)-51):(nrow(datos)-1),7]))
+```
+
+#Ejercicio 2
+
+Los datos conapo_2010.csv reportan el porcentaje de la población analfabeta, sin primaria terminada, sin drenaje, etc. En este ejercicio utilizaremos esta base de datos para construir un índice de carencias a nivel localidad.
+
+```{r}
+conapo <- read.csv('conapo_2010.csv', sep=' ')
+kable(head(conapo))
+pcacon<-prcomp(conapo[,c(-1,-11,-12,-13)])
+expvar <- data.frame(comp=1:length(pcacon$sdev), varianza_explicada=(pcacon$sdev)^2 / sum(pcacon$sdev^2))
+```
+
+Varianza explicada por cada componente.
+
+```{r}
+ggplot(expvar, aes(x=comp, y=varianza_explicada))+geom_line()+geom_point(size=3)+ ggtitle("Varianza explicada") + scale_x_discrete(breaks = 1:length(pcacon$sdev))
+```
+
