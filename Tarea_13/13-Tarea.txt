@@ -1,9 +1,0 @@
-1. Comprime una imagen en blanco y negro
-
-2. Implementa whitening en los datos faithful, compara las gráficas de los 
-datos crudos y preprocesados.
-
-3. Realiza un mapa del estado donde naciste, grafica alguna variable
-de tu interés (índice de marginación, población, ...) a nivel municipio
-coloreando los polígonos de acuerdo a esta variables. Si lo deseas utiliza 
-como fondo una imagen de google maps.

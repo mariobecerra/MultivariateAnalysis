@@ -144,23 +144,101 @@ for(i in c(50,100,350)){
 <div id="ejercicio-2" class="section level1">
 <h1>Ejercicio 2</h1>
 <p>Implementa whitening en los datos faithful, compara las gráficas de los datos crudos y preprocesados.</p>
+<p>Dats originales:</p>
+<pre class="r"><code>library(knitr)
+kable(head(faithful))</code></pre>
+<table>
+<thead>
+<tr class="header">
+<th align="right">eruptions</th>
+<th align="right">waiting</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="right">3.600</td>
+<td align="right">79</td>
+</tr>
+<tr class="even">
+<td align="right">1.800</td>
+<td align="right">54</td>
+</tr>
+<tr class="odd">
+<td align="right">3.333</td>
+<td align="right">74</td>
+</tr>
+<tr class="even">
+<td align="right">2.283</td>
+<td align="right">62</td>
+</tr>
+<tr class="odd">
+<td align="right">4.533</td>
+<td align="right">85</td>
+</tr>
+<tr class="even">
+<td align="right">2.883</td>
+<td align="right">55</td>
+</tr>
+</tbody>
+</table>
+<p>Media y matriz de covarianzas:</p>
+<pre class="r"><code>sapply(faithful, mean)</code></pre>
+<pre><code>## eruptions   waiting 
+##  3.487783 70.897059</code></pre>
+<pre class="r"><code>cov(faithful)</code></pre>
+<pre><code>##           eruptions   waiting
+## eruptions  1.302728  13.97781
+## waiting   13.977808 184.82331</code></pre>
 <pre class="r"><code>Cov &lt;- cov(faithful)
 eig2 &lt;- eigen(Cov)
-#eig2 &lt;- eigen(Cov %*% t(Cov))
-#eig2 &lt;- eigen(as.matrix(faithful) %*% t(as.matrix(faithful)))
 E &lt;- eig2$vectors
 D &lt;- diag(eig2$values)
 Dinv2 &lt;- diag(1/sqrt(eig2$values))
-#z &lt;- Dinv2 %*% t(E) %*% as.matrix(faithful$eruptions - mean(faithful$eruptions))
-z &lt;- Dinv2 %*% t(E) %*% t(as.matrix(faithful - apply(faithful, 2, mean)))
-apply(z, 1, mean)</code></pre>
-<pre><code>## [1]  2.278396 73.158148</code></pre>
-<pre class="r"><code>z &lt;- Dinv2 %*% t(E) %*% t(as.matrix(faithful - apply(faithful, 1, mean)))
-apply(z, 1, mean)</code></pre>
-<pre><code>## [1]  2.278396 73.158148</code></pre>
-<pre class="r"><code>z &lt;- Dinv2 %*% t(E) %*% t(as.matrix(faithful))
-apply(z, 1, mean)</code></pre>
-<pre><code>## [1] 5.204547 3.795638</code></pre>
+faithfulcent &lt;- faithful - cbind(rep(sapply(faithful, mean)[1], nrow(faithful)), rep(sapply(faithful, mean)[2], nrow(faithful)))
+WhitenedFaithful &lt;- t(Dinv2 %*% t(E) %*% t(faithfulcent))</code></pre>
+<p>Los datos con <em>whitening</em>:</p>
+<pre class="r"><code>kable(as.data.frame(head(WhitenedFaithful)))</code></pre>
+<table>
+<thead>
+<tr class="header">
+<th align="right">V1</th>
+<th align="right">V2</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="right">0.5932500</td>
+<td align="right">1.0117128</td>
+</tr>
+<tr class="even">
+<td align="right">-1.2451557</td>
+<td align="right">0.8236565</td>
+</tr>
+<tr class="odd">
+<td align="right">0.2260839</td>
+<td align="right">0.7864494</td>
+</tr>
+<tr class="even">
+<td align="right">-0.6573809</td>
+<td align="right">1.0714867</td>
+</tr>
+<tr class="odd">
+<td align="right">1.0372421</td>
+<td align="right">0.0459461</td>
+</tr>
+<tr class="even">
+<td align="right">-1.1660200</td>
+<td align="right">-1.2087815</td>
+</tr>
+</tbody>
+</table>
+<p>Media y matriz de covarianzas:</p>
+<pre class="r"><code>apply(WhitenedFaithful, 2, mean)</code></pre>
+<pre><code>## [1] 4.265339e-16 6.873650e-16</code></pre>
+<pre class="r"><code>cov(WhitenedFaithful)</code></pre>
+<pre><code>##               [,1]          [,2]
+## [1,]  1.000000e+00 -5.670137e-17
+## [2,] -5.670137e-17  1.000000e+00</code></pre>
 </div>
 <div id="ejercicio-3" class="section level1">
 <h1>Ejercicio 3</h1>

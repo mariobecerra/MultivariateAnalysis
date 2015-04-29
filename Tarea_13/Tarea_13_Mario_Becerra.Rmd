@@ -60,21 +60,39 @@ for(i in c(50,100,350)){
 
 Implementa whitening en los datos faithful, compara las gráficas de los datos crudos y preprocesados.
 
+Dats originales:
+```{r}
+library(knitr)
+kable(head(faithful))
+```
+
+Media y matriz de covarianzas:
+```{r}
+sapply(faithful, mean)
+cov(faithful)
+```
+
+
 ```{r}
 Cov <- cov(faithful)
 eig2 <- eigen(Cov)
-#eig2 <- eigen(Cov %*% t(Cov))
-#eig2 <- eigen(as.matrix(faithful) %*% t(as.matrix(faithful)))
 E <- eig2$vectors
 D <- diag(eig2$values)
 Dinv2 <- diag(1/sqrt(eig2$values))
-#z <- Dinv2 %*% t(E) %*% as.matrix(faithful$eruptions - mean(faithful$eruptions))
-z <- Dinv2 %*% t(E) %*% t(as.matrix(faithful - apply(faithful, 2, mean)))
-apply(z, 1, mean)
-z <- Dinv2 %*% t(E) %*% t(as.matrix(faithful - apply(faithful, 1, mean)))
-apply(z, 1, mean)
-z <- Dinv2 %*% t(E) %*% t(as.matrix(faithful))
-apply(z, 1, mean)
+faithfulcent <- faithful - cbind(rep(sapply(faithful, mean)[1], nrow(faithful)), rep(sapply(faithful, mean)[2], nrow(faithful)))
+WhitenedFaithful <- t(Dinv2 %*% t(E) %*% t(faithfulcent))
+```
+
+Los datos con *whitening*:
+```{r}
+kable(as.data.frame(head(WhitenedFaithful)))
+```
+
+Media y matriz de covarianzas:
+
+```{r}
+apply(WhitenedFaithful, 2, mean)
+cov(WhitenedFaithful)
 ```
 
 
