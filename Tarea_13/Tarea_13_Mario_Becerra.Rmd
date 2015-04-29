@@ -13,17 +13,16 @@ Comprimir una imagen en blanco y negro usando PCA.
 library(png)
 tere <- readPNG('Image.png')
 image(tere[,,1])
-tereMat <- tere[,,1]
+tereMat <- (tere[,,1]+tere[,,2]+tere[,,3])/3
 dim(tereMat)
 
-pcaTere <- prcomp(tereMat)
-svdTere <- svd(tereMat)
-
-#Con SVD
-for(k in c(10,30,60,100)){
-  print(k)
-  image(svdTere$u[,1:k] %*% diag(svdTere$d)[1:k,1:k] %*% t(svdTere$v)[1:k,])
-}
+# svdTere <- svd(tereMat)
+# 
+# #Con SVD
+# for(k in c(10,30,60,100)){
+#   print(k)
+#   image(svdTere$u[,1:k] %*% diag(svdTere$d)[1:k,1:k] %*% t(svdTere$v)[1:k,], axes = FALSE, col = grey(seq(0, 1, length = 256)))
+# }
 
 #Con PCA
 calculaImagenReducida <- function(img, k) {
@@ -44,15 +43,18 @@ calculaImagenReducida <- function(img, k) {
   Compressed_Data
 }
 
-for(i in c(2,10,30,50,100,300)){
-  print(i)
-  image(calculaImagenReducida(tereMat, i))
-}
+# for(i in c(2,10,30,50,100,300)){
+#   print(i)
+#   image(calculaImagenReducida(tereMat, i), axes = FALSE, col = grey(seq(0, 1, length = 256)))
+# }
 
 tati <- readPNG('Tat.png')
-for(i in c(50,100,350)){
+tatMean <- (tati[,,1]+tati[,,2]+tati[,,3])/3
+dim(tatMean)
+image(tatMean, axes = FALSE, col = grey(seq(0, 1, length = 256)), main='Original')
+for(i in c(10,50,100,350, 500)){
   print(i)
-  image(calculaImagenReducida(tati[,,2], i))
+  image(calculaImagenReducida(tatMean, i), , axes = FALSE, col = grey(seq(0, 1, length = 256)), main=paste(i, 'componentes'))
 }
 ```
 
@@ -93,6 +95,12 @@ Media y matriz de covarianzas:
 ```{r}
 apply(WhitenedFaithful, 2, mean)
 cov(WhitenedFaithful)
+```
+
+```{r}
+library(ggplot2)
+ggplot(faithful) + geom_point(aes(x=eruptions, y=waiting)) + ggtitle('Originales')
+ggplot(as.data.frame(WhitenedFaithful)) + geom_point(aes(x=V1, y=V2)) + ggtitle('Transformados')
 ```
 
 
