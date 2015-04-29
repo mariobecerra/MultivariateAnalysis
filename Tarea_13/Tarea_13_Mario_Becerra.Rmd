@@ -1,0 +1,115 @@
+---
+title: "Tarea 13"
+author: "Mario Becerra 124362"
+date: "28/04/2015"
+output: html_document
+---
+
+#Ejercicio 1
+
+Comprimir una imagen en blanco y negro usando PCA.
+
+```{r, cache=TRUE}
+library(png)
+tere <- readPNG('Image.png')
+image(tere[,,1])
+tereMat <- tere[,,1]
+dim(tereMat)
+
+pcaTere <- prcomp(tereMat)
+svdTere <- svd(tereMat)
+
+#Con SVD
+for(k in c(10,30,60,100)){
+  print(k)
+  image(svdTere$u[,1:k] %*% diag(svdTere$d)[1:k,1:k] %*% t(svdTere$v)[1:k,])
+}
+
+#Con PCA
+calculaImagenReducida <- function(img, k) {
+  Data_mean = apply(img, 2, mean) #Saca la media de cada columna
+  a <- dim(img) #Dimensiones de la imagen original
+  Data_meanNew <- rep(Data_mean, a[1])
+  DataAdjust = img - Data_meanNew
+  cov_data = cov(DataAdjust)
+  eig <- eigen(cov_data)
+  V_trans = t(eig$vectors)
+  DataAdjust_trans = t(DataAdjust)
+  FinalData = V_trans %*% DataAdjust_trans
+  #PCs = a[2] - k
+  Reduced_V = eig$vectors[,1:k]
+  Y=t(Reduced_V) %*% DataAdjust_trans
+  Compressed_Data=Reduced_V %*% Y                                         
+  Compressed_Data = t(Compressed_Data) + Data_meanNew
+  Compressed_Data
+}
+
+for(i in c(2,10,30,50,100,300)){
+  print(i)
+  image(calculaImagenReducida(tereMat, i))
+}
+
+tati <- readPNG('Tat.png')
+for(i in c(50,100,350)){
+  print(i)
+  image(calculaImagenReducida(tati[,,2], i))
+}
+```
+
+#Ejercicio 2
+
+Implementa whitening en los datos faithful, compara las gráficas de los datos crudos y preprocesados.
+
+```{r}
+Cov <- cov(faithful)
+eig2 <- eigen(Cov)
+#eig2 <- eigen(Cov %*% t(Cov))
+#eig2 <- eigen(as.matrix(faithful) %*% t(as.matrix(faithful)))
+E <- eig2$vectors
+D <- diag(eig2$values)
+Dinv2 <- diag(1/sqrt(eig2$values))
+#z <- Dinv2 %*% t(E) %*% as.matrix(faithful$eruptions - mean(faithful$eruptions))
+z <- Dinv2 %*% t(E) %*% t(as.matrix(faithful - apply(faithful, 2, mean)))
+apply(z, 1, mean)
+z <- Dinv2 %*% t(E) %*% t(as.matrix(faithful - apply(faithful, 1, mean)))
+apply(z, 1, mean)
+z <- Dinv2 %*% t(E) %*% t(as.matrix(faithful))
+apply(z, 1, mean)
+```
+
+
+#Ejercicio 3
+
+3. Realiza un mapa de un estado, grafica alguna variable de tu interés (índice de marginación, población, ...) a nivel municipio coloreando los polígonos de acuerdo a esta variables. Si lo deseas utiliza como fondo una imagen de google maps.
+
+```{r}
+library(rgdal)
+library(ggplot2)
+library(dplyr)
+
+pob <- read.csv('pobl.csv')
+mun_shp <- readOGR("./municipios" , "MUNICIPIOS")
+mun_shp@data$id = rownames(mun_shp@data)
+DF_shp <- subset(mun_shp, CVE_ENT == '09')
+
+DF_df <- DF_shp %>% 
+  fortify(region = "CVE_MUN") %>%
+  arrange(order)
+DF_df$id <- as.integer(DF_df$id)
+
+DF_ind <- DF_df %>%
+  mutate(CVE = id) %>%
+  left_join(pob[,c('id','pob')])
+
+ggplot() + 
+  geom_polygon(data = DF_ind, aes(long, lat, group = group, fill = pob)) +
+  labs(title = "Población en el DF", fill = "Población") +
+  coord_fixed()
+```
+
+
+
+
+
+
+
