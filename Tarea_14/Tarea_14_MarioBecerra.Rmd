@@ -1,0 +1,6 @@
+---
+title: "Tarea 14"
+author: "Mario Becerra 124362"
+date: "03/05/2015"
+output: html_document
+---
