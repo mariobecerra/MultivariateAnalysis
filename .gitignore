@@ -1,5 +1,7 @@
 Tarea_07/*.Rdata
 *.Rhistory
 .Rhistory
-/Tarea_13/Tarea_13_Mario_Becerra_cache/*
-/Tarea_13/Tarea_13_Mario_Becerra_files/*
+Tarea_13/Tarea_13_Mario_Becerra_cache/*
+Tarea_13/Tarea_13_Mario_Becerra_files/*
+!Trabajo_Final/R/*.Rmd
+Trabajo_Final/*
