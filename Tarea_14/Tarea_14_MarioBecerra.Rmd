@@ -4,3 +4,175 @@ author: "Mario Becerra 124362"
 date: "03/05/2015"
 output: html_document
 ---
+
+```{r setup, warning=FALSE}
+library(dplyr)
+library(ggplot2)
+library(ggthemes)
+library(GGally)
+library(rgdal)
+library(knitr)
+library(gstat)
+library(geoR)
+knitr::opts_chunk$set(warning=FALSE, message=FALSE, cache=TRUE)
+ggthemes_data$colorblind <- append(ggthemes_data$colorblind, "#80f7e9")
+assignInNamespace("ggthemes_data", ggthemes_data, ns="ggthemes")
+```
+
+```{r, cache=FALSE}
+theme_nothing <- function(base_size = 12, base_family = "Helvetica")
+  {
+  theme_bw(base_size = base_size, base_family = base_family) %+replace%
+      theme(
+            #legend.text=element_blank(),
+            axis.text.x =  element_blank(),
+            axis.text.y =  element_blank(),
+            axis.title.x=  element_blank(),
+            axis.title.y=  element_blank(),
+            rect             = element_blank(),
+            line             = element_blank()
+            #text             = element_blank(),
+            #axis.ticks.margin = unit(0, "lines")
+           )
+  }
+```
+
+La base de datos “BatonRouge.txt” contiene la información de la venta de 50 casas habitación en Baton Rouge Louisiana. El objetivo es predecir el precio de venta en escala logarítmica para una casa con características dadas.
+
+```{r}
+baton <- read.table('baton.txt', header=TRUE, colClasses=c('numeric', 'integer', 'integer', 'integer', 'factor', 'factor', 'factor', 'numeric', 'numeric', 'numeric', 'numeric'))
+baton_sh <- readOGR('./tl_2013', 'tl_2013_22033_edges')
+```
+
+```{r, eval=FALSE}
+baton_f <- fortify(baton_sh)
+save(baton_f, file='./Out/baton_f.RData')
+```
+
+Las casas en el mapa se ven así:
+
+```{r}
+load('./Out/baton_f.RData')
+ggplot() + 
+  geom_polygon(data=baton_f, aes(long, lat, group=group), colour='black', fill='white', size=0.2) + 
+  geom_point(data=baton, aes(x=Longitude, y=Latitude, size=logSellingPr), colour='blue', inherit.aes=FALSE) +
+  coord_fixed() + theme_nothing()
+```
+
+
+Ajustamos un primer modelo lineal para el precio de las casas usando como predictores: el	área	habitable	(LivingArea),	edad	
+(Age), otra área (OtherArea) y número de baños (Bathrooms).
+
+```{r}
+ggpairs(baton[,c('logSellingPr', 'Age', 'OtherArea', 'LivingArea', 'Bedrooms')])
+
+mod1 <- lm(logSellingPr ~ Age + Bathrooms + OtherArea +LivingArea, data=baton)
+summary(mod1)
+```
+
+Ahora veamos los residuales en el mapa.
+
+```{r}
+baton$res <- mod1$residuals
+baton$res_cat <- cut(baton$res, 6)
+
+ggplot() + 
+  geom_polygon(data=baton_f, aes(long, lat, group=group), colour='dark grey', fill='white', size=0.2) + 
+  geom_point(data=baton, aes(x=Longitude, y=Latitude, size=logSellingPr, colour=res_cat), inherit.aes=FALSE) +
+  coord_fixed() + scale_colour_colorblind() + theme_nothing()
+```
+
+Ajustemos el semivariograma empírico para los precios.
+
+```{r}
+baton.data <- data.frame(x = baton$Easting, y = baton$Northing, res = baton$res)
+coordinates(baton.data)=~x+y
+emp.variog <- variogram(res ~ 1, baton.data, cutoff = 5000)
+
+ggplot(emp.variog, aes(x = dist, y = gamma)) +
+  geom_point() +
+  labs(title = expression("Semivariograma empírico"), x = "distancia", y = "semivarianza")
+```
+
+Ahora un semivariograma paramétrico (esférico).
+
+```{r}
+sph.variog <- fit.variogram(emp.variog, vgm(psill=0.015, model="Sph", range = 1200, nugget = 0.008),fit.method = 2)
+plot(emp.variog, sph.variog)
+```
+
+Usaremos las estimaciones del paso anterior (mínimos cuadrados ponderados) como valores iniciales de los parámetros $\sigma^2$, $\phi$, $\tau^2$, obtendremos las estimaciones de máxima verosimilitud restringida (REML) para los coeficientes del modelo y para los parámetros de la función de covarianza. 
+
+```{r}
+sigma2.sph <- sph.variog$psill[2]
+phi.sph <- sph.variog$range[2]
+tau2.sph <- sph.variog$psill[1]
+dist.vec <- emp.variog$dist # vector de distancias
+
+baton.geo <- as.geodata(baton, coords.col = c(10,11), data.col = 1, covar.col=c(2,3,4,6))
+baton.reml <- likfit(baton.geo, trend = ~ baton$LivingArea + baton$OtherArea + baton$Age + baton$Bathrooms, cov.model="spherical", 
+  ini=c(sigma2.sph, phi.sph), nugget = tau2.sph, fix.nugget = FALSE, lik.met="REML")
+
+data.frame(Método = c("Inicial","REML"), 
+  sigma2 = c(sigma2.sph, baton.reml$sigmasq), 
+  phi = c(phi.sph, baton.reml$phi), 
+  tau2 = c(tau2.sph, baton.reml$tausq))
+
+sph.variog <- function(sigma2, phi, tau2, dist){
+  n <- length(dist)
+  sph.variog.vec <- rep(0,n)
+  for(i in 1:n){
+    if(dist[i] < phi){
+      sph.variog.vec[i] <- tau2 + (sigma2 * (((3 * dist[i]) / (2 * phi)) - 
+          ((dist[i] ^ 3)/(2 * (phi ^ 3)))))
+    }
+    if(dist[i] >= phi){
+      sph.variog.vec[i] <- tau2 + sigma2  
+    }
+  }
+  return(sph.variog.vec)
+}
+
+ggplot(data=emp.variog, aes(x = dist, y = gamma)) + geom_point() +
+  labs(title = expression("Semivariograma"), x = "distancia", y = "semivarianza") +
+  stat_function(fun = sph.variog, args = list(sigma2 = baton.reml$sigmasq, phi = baton.reml$phi, tau2 = baton.reml$tausq), 
+                  aes(colour = "REML")) +
+  stat_function(fun = sph.variog, args = list(sigma2 = sigma2.sph, phi = phi.sph, tau2 = tau2.sph), 
+                  aes(colour = "Inicial")) +
+  scale_colour_manual("Variograma", values = c("steelblue", "green3"))
+```
+
+Ahora, utilizaremos kriging universal con covariograma esférico usando las estimaciones de REML para predecir el valor de venta para una casa ubicada en Easting = 680660, Northing = 3376363, con las siguientes características: área habitable = 935 $ft^2$ , otra área = 332 $ft^2$, edad = 25 años, baños = 1 (el valor real de venta para esta casa fue 10.34).
+
+```{r, eval=FALSE}
+sigma2.reml <- baton.reml$sigmasq
+phi.reml <- baton.reml$phi
+tau2.reml <- baton.reml$tausq
+
+x0=680660
+y0=3376363
+loc.uk <- matrix(c(x0,y0), nrow=1, ncol=2)
+
+LivingArea <- 935
+OtherArea <- 332
+Age <- 25
+Bathrooms <- 1
+
+kc.uk.control <- krige.control(type.krige = "ok", trend.d = ~ baton$LivingArea + baton$OtherArea + baton$Age + baton$Bathrooms, 
+  trend.l = ~~935+332+25+1, 
+  cov.model = "spherical", cov.pars=c(sigma2.reml, phi.reml), nugget = tau2.reml)
+kc.uk.s0 <- krige.conv(baton.geo, locations = loc.uk, krige = kc.uk.control)
+
+kc.uk.control <- krige.control(type.krige = "ok", trend.d = ~ LivingArea + OtherArea + Age + Bathrooms, 
+  trend.l = ~935+332+25+1, 
+  cov.model = "spherical", obj.model=baton.reml)
+kc.uk.s0 <- krige.conv(baton.geo, locations = loc.uk, krige = kc.uk.control)
+
+kc.uk.control <- krige.control(type.krige = "ok", trend.d = ~ baton$LivingArea + baton$OtherArea + baton$Age + baton$Bathrooms, 
+  trend.l = ~ LivingArea + OtherArea + Age + Bathrooms, 
+  cov.model = "spherical", cov.pars=c(sigma2.reml, phi.reml), nugget = tau2.reml)
+kc.uk.s0 <- krige.conv(baton.geo, locations = loc.uk, krige = kc.uk.control)
+```
+
+
+
