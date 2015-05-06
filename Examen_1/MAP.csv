@@ -1,0 +1,9 @@
+Variable,Resultado,Probabilidad
+contact,unknown,0.5929
+duration,223-370,0.2169
+housing,yes,0.9519
+job,blue-collar,0.2513
+loan,no,0.8626
+poutcome,unknown,0.8841
+previous,FALSE,0.8938
+y,no,0.9127
