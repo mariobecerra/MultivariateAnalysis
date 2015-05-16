@@ -4,6 +4,7 @@ author: "Mario Becerra 124362"
 date: "03/05/2015"
 output: html_document
 ---
+<<<<<<< HEAD
 
 ```{r setup, warning=FALSE}
 library(dplyr)
@@ -325,3 +326,5 @@ kc.uk.s0$predict
 kc.uk.s0$krige.var
 ```
 
+=======
+>>>>>>> a0d8e16ad732d23824987a9712b6d004935a5573
