@@ -1,0 +1,68 @@
+---
+title: "Ejercicio Modelos Jerárquicos"
+author: "Mario Becerra C"
+date: "13/05/2015"
+output: html_document
+---
+
+Implementaremos varios modelos en JAGS, la base de datos que usaremos contiene información de mediciones de radón (activity) y del suelo en el que se hicieron las mediciones (floor = 0 casas con sótano, floor = 1 casas sin sótano), las mediciones corresponden a 919 hogares muestreados de 85 condados de Minnesota. El objetivo es construir un modelo de regresión en el que la medición de radón es la variable independiente y el tipo de suelo es la covariable.
+
+```{r}
+library(R2jags)
+```
+
+
+```{r}
+load('radon.RData')
+radon.2$stfips2 <- radon.2[,5]
+radon.2[,5] <- NULL
+radon.2$activity2 <- log(radon.2$activity + 0.1)
+head(radon.2)
+```
+
+1) Iniciaremos con un modelo de regresión de unidades iguales, este modelo ignora la variación en los niveles de radón entre los condados.
+
+```{r}
+mod1 <- lm(activity2~floor, data=radon.2)
+summary(mod1)
+modelo1 <- 'model{
+  for(i in 1:N){
+    y[i]~dnorm(y.hat[i],tau.y)
+    y.hat[i]<-a+b*x[i]
+  }
+  a~dnorm(0,0.0001)
+  b~dnorm(0,0.0001)
+  tau.y<-pow(sigma.y,-2)
+  sigma.y~dunif(0,100)
+}'
+cat(modelo1, file = 'modelo1.modelo')
+
+N=nrow(radon.2)
+activity2 <- radon.2$activity2
+floor <- radon.2$floor
+
+jags.data <- list("floor", "activity2", "N")
+
+
+jags.inits <- function(){
+  list("alpha" = runif(1),
+    "mu" = runif(1), 
+    "lambda" = runif(N))
+}
+# debemos especificar también el nombre de los parámetros que vamos a guardar
+jags.parameters <-  c("alpha","mu","lambda")
+# Y usamos la función jags (más adelante discutiremos los otros parámetros de 
+# la función)
+jags.fit <- jags(data = jags.data, inits = jags.inits, 
+  model.file = "modelo1.modelo", parameters.to.save = jags.parameters,
+  n.chains = 2, n.iter = 50) 
+```
+
+2) Después pasamos a un modelo de unidades independientes, en este simplemente incluímos indicadoras a nivel condado.
+
+```{r}
+
+```
+
+
+

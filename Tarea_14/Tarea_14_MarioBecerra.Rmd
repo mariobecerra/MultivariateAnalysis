@@ -79,7 +79,7 @@ baton$res_cat <- cut(baton$res, 6)
 ggplot() + 
   geom_polygon(data=baton_f, aes(long, lat, group=group), colour='dark grey', fill='white', size=0.2) + 
   geom_point(data=baton, aes(x=Longitude, y=Latitude, size=logSellingPr, colour=res_cat), inherit.aes=FALSE) +
-  coord_fixed() + scale_colour_colorblind() + theme_nothing()
+  coord_fixed() + theme_nothing() + scale_color_brewer(palette = "Blues")
 ```
 
 Ajustemos el semivariograma empírico para los precios.
@@ -149,30 +149,179 @@ sigma2.reml <- baton.reml$sigmasq
 phi.reml <- baton.reml$phi
 tau2.reml <- baton.reml$tausq
 
-x0=680660
-y0=3376363
-loc.uk <- matrix(c(x0,y0), nrow=1, ncol=2)
-
+# Predicción
 LivingArea <- 935
 OtherArea <- 332
 Age <- 25
 Bathrooms <- 1
-
-kc.uk.control <- krige.control(type.krige = "ok", trend.d = ~ baton$LivingArea + baton$OtherArea + baton$Age + baton$Bathrooms, 
-  trend.l = ~~935+332+25+1, 
-  cov.model = "spherical", cov.pars=c(sigma2.reml, phi.reml), nugget = tau2.reml)
+kc.uk.control <- krige.control(type.krige = "ok", 
+  trend.d = ~ baton$LivingArea + baton$OtherArea + baton$Age + baton$Bathrooms, 
+  trend.l = ~ ~ LivingArea + OtherArea + Age + Bathrooms, 
+  cov.model = "spherical", cov.pars = c(sigma2.reml, phi.reml), nugget = tau2.reml)
+loc.uk <- matrix(c(680660, 3376363), nrow=1, ncol=2)
 kc.uk.s0 <- krige.conv(baton.geo, locations = loc.uk, krige = kc.uk.control)
+# estimaciones de beta:
+kc.uk.s0$beta.est
+# predicción
+kc.uk.s0$predict
+kc.uk.s0$krige.var
 
-kc.uk.control <- krige.control(type.krige = "ok", trend.d = ~ LivingArea + OtherArea + Age + Bathrooms, 
-  trend.l = ~935+332+25+1, 
-  cov.model = "spherical", obj.model=baton.reml)
-kc.uk.s0 <- krige.conv(baton.geo, locations = loc.uk, krige = kc.uk.control)
-
-kc.uk.control <- krige.control(type.krige = "ok", trend.d = ~ baton$LivingArea + baton$OtherArea + baton$Age + baton$Bathrooms, 
-  trend.l = ~ LivingArea + OtherArea + Age + Bathrooms, 
-  cov.model = "spherical", cov.pars=c(sigma2.reml, phi.reml), nugget = tau2.reml)
-kc.uk.s0 <- krige.conv(baton.geo, locations = loc.uk, krige = kc.uk.control)
+# x0=680660
+# y0=3376363
+# loc.uk <- matrix(c(x0,y0), nrow=1, ncol=2)
+# 
+# LivingArea <- 935
+# OtherArea <- 332
+# Age <- 25
+# Bathrooms <- 1
+# 
+# kc.uk.control <- krige.control(type.krige = "ok", trend.d = ~ baton$LivingArea + baton$OtherArea + baton$Age + baton$Bathrooms, 
+#   trend.l = ~~935+332+25+1, 
+#   cov.model = "spherical", cov.pars=c(sigma2.reml, phi.reml), nugget = tau2.reml)
+# kc.uk.s0 <- krige.conv(baton.geo, locations = loc.uk, krige = kc.uk.control)
+# 
+# kc.uk.control <- krige.control(type.krige = "ok", trend.d = ~ LivingArea + OtherArea + Age + Bathrooms, 
+#   trend.l = ~935+332+25+1, 
+#   cov.model = "spherical", obj.model=baton.reml)
+# kc.uk.s0 <- krige.conv(baton.geo, locations = loc.uk, krige = kc.uk.control)
+# 
+# kc.uk.control <- krige.control(type.krige = "ok", trend.d = ~ baton$LivingArea + baton$OtherArea + baton$Age + baton$Bathrooms, 
+#   trend.l = ~ LivingArea + OtherArea + Age + Bathrooms, 
+#   cov.model = "spherical", cov.pars=c(sigma2.reml, phi.reml), nugget = tau2.reml)
+# kc.uk.s0 <- krige.conv(baton.geo, locations = loc.uk, krige = kc.uk.control)
 ```
 
 
+
+```{r}
+## Baton
+
+baton <- read.table("baton.txt", header=T, quote="\"")
+
+fit <- lm(logSellingPr ~ LivingArea + OtherArea + Age + Bathrooms, baton)
+
+summary(fit)
+
+write.table(summary(fit)$coeff, sep = ",", col.names = NA)
+
+
+
+baton$residuals <- baton$logSellingPr-fit$fitted.values
+
+
+
+# Grafica los residuales en el mapa
+
+baton$residuals.cat <- cut(baton$residuals, seq(min(baton$residuals), max(baton$residuals), length.out = 6), include.lowest = TRUE)
+
+br <- readShapeSpatial("tl_2013_22033_edges.shp")
+
+shape.fort <- fortify(br) 
+
+shape.fort <- shape.fort[order(shape.fort$order), ] 
+
+
+
+ggplot(data = baton_f, aes(long, lat)) + 
+  geom_polygon(colour='darkgray', fill = "gray", aes(group = group)) + 
+  geom_point(data = baton, aes(x = Longitude, y = Latitude, color = residuals.cat)) +
+  scale_color_brewer(palette = "Blues")
+
+
+
+# Semi-variograma
+
+residuals <- baton$logSellingPr-fit$fitted.values
+
+
+
+baton.data <- data.frame(x = baton$Easting, y = baton$Northing, residuals)
+
+coordinates(baton.data)=~x+y
+
+
+
+emp.variog <- variogram(residuals ~ 1, baton.data, cutoff=5000)
+
+emp.variog
+
+plot(emp.variog)
+
+
+
+variog.res <- fit.variogram(emp.variog,vgm(psill = 0.016, model="Sph",  range = 3000, nugget = 0.005), fit.method = 2)
+plot(emp.variog, variog.res)
+
+baton.data <- data.frame(x = baton$Easting, y = baton$Northing, residuals)
+
+coordinates(baton.data)=~x+y
+
+
+
+sigma2.sph <- variog.res$psill[2]
+
+phi.sph <- variog.res$range[2]
+
+tau2.sph <- variog.res$psill[1]
+
+
+
+baton.df <- data.frame(baton$Easting, baton$Northing, baton$logSellingPr)
+
+baton.geo <- as.geodata(baton, coords.col = c(10,11), data.col = 1)
+
+
+
+baton.reml <- likfit(baton.geo, trend = ~ baton$LivingArea + baton$OtherArea + 
+
+  baton$Age + baton$Bathrooms, cov.model="spherical", 
+
+  ini = c(sigma2.sph, phi.sph), nugget = tau2.sph, 
+
+  fix.nugget = FALSE, lik.met="REML")
+
+
+
+sigma2.reml <- baton.reml$sigmasq
+
+phi.reml <- baton.reml$phi
+
+tau2.reml <- baton.reml$tausq
+
+
+
+# Predicción
+
+LivingArea <- 935
+
+OtherArea <- 332
+
+Age <- 25
+
+Bathrooms <- 1
+
+
+
+kc.uk.control <- krige.control(type.krige = "ok", 
+
+  trend.d = ~ baton$LivingArea + baton$OtherArea + baton$Age + baton$Bathrooms, 
+
+  trend.l = ~ ~ LivingArea + OtherArea + Age + Bathrooms, 
+
+  cov.model = "spherical", cov.pars = c(sigma2.reml, phi.reml), nugget = tau2.reml)
+
+loc.uk <- matrix(c(680660, 3376363), nrow=1, ncol=2)
+
+kc.uk.s0 <- krige.conv(baton.geo, locations = loc.uk, krige = kc.uk.control)
+
+# estimaciones de beta:
+
+kc.uk.s0$beta.est
+
+# predicción
+
+kc.uk.s0$predict
+
+kc.uk.s0$krige.var
+```
 

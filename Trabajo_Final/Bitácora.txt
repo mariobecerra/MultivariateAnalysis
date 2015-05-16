@@ -1,0 +1,3 @@
+Catálogo Único de Claves de Áreas Geoestadísticas Estatales, Municipales y Localidades - consulta y descarga
+http://www.inegi.org.mx/geo/contenidos/geoestadistica/CatalogoClaves.aspx
+Primero los había bajado sin Latitud y Longitud decimal, por eso salían desfazados.
